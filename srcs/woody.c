@@ -24,6 +24,8 @@ int main(int argc, char **argv)
 {
 	FILE *elf_bin_file;
 	Elf64_Ehdr header;
+	WoodyInfos winfo;
+	int idx;
 
 	// Check si un fichier est bien passé en argument
 	if (argc != 2)
@@ -47,6 +49,44 @@ int main(int argc, char **argv)
 	{
 		printf("Not a valid ELF64 file\n");
 		return ERR_NOTELF;
+	}
+
+	// Sauvegarde de l'entry point d'origine pour créer le jump après
+	winfo.original_entry = header.e_entry;
+	printf("Original Entry: %ld\n", winfo.original_entry);
+
+	// Recherche du PT_NOTE
+	fseek(elf_bin_file, header.e_phoff, SEEK_SET);
+	idx = 0;
+	while (idx++ < header.e_phnum)
+	{
+		Elf64_Phdr pheader;
+		fread(&pheader, sizeof(pheader), 1, elf_bin_file);
+		switch (pheader.p_type)
+		{
+			case PT_NOTE:
+				printf("Segment PT_NOTE [%d] trouvé :\n", idx);
+				printf("  - Offset fichier : 0x%lx\n", pheader.p_offset);
+				printf("  - Adresse Virtuelle : 0x%lx\n", pheader.p_vaddr);
+				printf("  - Taille en mémoire : %lu octets\n", pheader.p_memsz);
+				printf("  - Flags : %c%c%c\n",
+					(pheader.p_flags & PF_R) ? 'R' : '-',
+					(pheader.p_flags & PF_W) ? 'W' : '-',
+					(pheader.p_flags & PF_X) ? 'X' : '-');
+				break;
+			case PT_LOAD:
+				printf("Segment PT_LOAD [%d] trouvé :\n", idx);
+				printf("  - Offset fichier : 0x%lx\n", pheader.p_offset);
+				printf("  - Adresse Virtuelle : 0x%lx\n", pheader.p_vaddr);
+				printf("  - Taille en mémoire : %lu octets\n", pheader.p_memsz);
+				printf("  - Flags : %c%c%c\n",
+					(pheader.p_flags & PF_R) ? 'R' : '-',
+					(pheader.p_flags & PF_W) ? 'W' : '-',
+					(pheader.p_flags & PF_X) ? 'X' : '-');
+				break;
+			default:
+				continue;
+		}
 	}
 
 	fclose(elf_bin_file);

@@ -11,4 +11,8 @@ enum ERROR {
 	ERR_NOTELF,
 };
 
+typedef struct WoodyInfos {
+	Elf64_Addr original_entry;
+} WoodyInfos;
+
 #endif
