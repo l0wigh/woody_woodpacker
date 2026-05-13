@@ -15,13 +15,15 @@ _start:
 	mov rdx, 12
 	syscall
 
-	mov rax, r15 	; On copie l'adresse de notre OEP qu'on a choppé au runtime
-	; mov rbx, 0xc0000000		; Le décalage mémoire de la zone du packer
-	; add rax, r15			; On ajoute l'offset aléatoire récupérer plus tôt
-	; sub rax, rbx			; On soustrait le décalage
+	mov rax, r15			; Début stub
+	mov rbx, [to_sub]		; Load notre entry point
+	sub rax, rbx			; RAX = virtual base
+	mov rbx, [old_entry]	; Récupération du vrai entry point
+	add rax, rbx			; Virtualisation
 
 	push rax				; On push l'adresse
 	ret						; Et là ça part dessus
 
 woody_str db "...WOODY...", 10, 0
-old_entry dq 0x0000000000000000
+old_entry dq 0xAAAAAAAAAAAAAAAA
+to_sub dq 0xBBBBBBBBBBBBBBBB
