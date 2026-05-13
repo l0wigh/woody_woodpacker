@@ -6,6 +6,7 @@ _start:
 	call .get_rip			; Sert à récuperer l'adresse mémoire aléatoire
 .get_rip:					;
 	pop r15					; On fout le rip dans r15
+	push rdx
 	sub r15, .get_rip		; On soustrait à ce rip, l'adresse de notre label
 
 	; Call classique du ...WOODY...
@@ -21,8 +22,8 @@ _start:
 	mov rbx, [old_entry]	; Récupération du vrai entry point
 	add rax, rbx			; Virtualisation
 
-	push rax				; On push l'adresse
-	ret						; Et là ça part dessus
+	pop rdx
+	jmp rax
 
 woody_str db "...WOODY...", 10, 0
 old_entry dq 0xAAAAAAAAAAAAAAAA

@@ -33,6 +33,10 @@ tests:
 	@cd tests && ./clean_bin.sh
 	@printf "\033[2K\r${GRN}${TOTEM} [TESTS]${RST} done$(END)\n"
 
+stub:
+	@cd stub; fasm stub.s stub.bin; xxd -i stub.bin > ../srcs/stub.h
+	@make re
+	@printf "\033[2K\r${GRN}${TOTEM} [STUB]${RST} done$(END)\n"
 
 clean:
 	@rm -rf $(OBJS_DIR)
@@ -45,4 +49,4 @@ fclean: clean
 
 re: fclean all
 
-.PHONY:		all clean fclean re
+.PHONY:		all clean fclean re tests stub
