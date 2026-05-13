@@ -14,7 +14,7 @@ PROJECT_H	= srcs/woody.h
 OBJS		= $(SRCS:.c=.o)
 OBJECTS_PREFIXED = $(addprefix $(OBJS_DIR), $(OBJS))
 CC			= gcc
-CC_FLAGS	= -Wall -Werror -Wextra -g3
+CC_FLAGS	= -Wall -Werror -Wextra -g3 -fsanitize=address
 LIBS		=
 
 $(OBJS_DIR)%.o : %.c $(PROJECT_H)
@@ -28,6 +28,11 @@ $(NAME): $(OBJECTS_PREFIXED)
 	@printf "\033[2K\r\033[0;32m${TOTEM} [END]\033[0m $(NAME)$(END)\n"
 
 all: $(NAME)
+
+tests:
+	@cd tests && ./clean_bin.sh
+	@printf "\033[2K\r${GRN}${TOTEM} [TESTS]${RST} done$(END)\n"
+
 
 clean:
 	@rm -rf $(OBJS_DIR)
