@@ -18,6 +18,7 @@
 // ...WOODY... <- Au début du programme encrypté
 
 #include "woody.h"
+#include <elf.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -179,13 +180,58 @@ int main(int argc, char **argv)
 					(pheader.p_flags & PF_R) ? 'R' : '-',
 					(pheader.p_flags & PF_W) ? 'W' : '-',
 					(pheader.p_flags & PF_X) ? 'X' : '-');
-				goto end;
+				goto next;
 			default:
 				continue;
 		}
 	}
 
-end:
+next:
+	Elf64_Shdr sh_tab;
+	char name_buffer[64];
+	fseek(this.binary, this.header.e_shoff + (this.header.e_shstrndx * this.header.e_shentsize), SEEK_SET);
+	fread(&sh_tab, sizeof(Elf64_Shdr), 1, this.binary);
+	printf("This: %lx\n", ftell(this.binary));
+	idx = 0;
+	while (idx++ < this.header.e_shnum)
+	{
+		Elf64_Shdr shdr;
+
+		fseek(this.binary, this.header.e_shoff + (idx * this.header.e_shentsize), SEEK_SET);
+		fread(&shdr, sizeof(Elf64_Shdr), 1, this.binary);
+		fseek(this.binary, sh_tab.sh_offset + shdr.sh_name, SEEK_SET);
+		fread(name_buffer, 1, sizeof(name_buffer) - 1, this.binary);
+		name_buffer[sizeof(name_buffer) - 1] = '\0';
+		if (strcmp(name_buffer, ".text") == 0)
+		{
+			printf("sh_tab.sh_offset: %lx\n", shdr.sh_offset);
+			printf("sh_tab.sh_name: %x\n", shdr.sh_name);
+			printf("shdr.sh_addr: %lx\n", shdr.sh_addr);
+			printf("fin: %lx", shdr.sh_size);
+			fseek(this.file, shdr.sh_offset, SEEK_SET);
+			fseek(this.binary, shdr.sh_offset, SEEK_SET);
+			size_t i = 0;
+			printf("XOR: %x\n", (char)this.original_entry);
+			for (; i < shdr.sh_size; i = i + BUFFER_SIZE)
+			{
+				fread(&buffer, BUFFER_SIZE, 1, this.file);
+				for (size_t j = 0; j < BUFFER_SIZE; j++)
+					buffer[j] ^= (char) this.original_entry;
+				fwrite(buffer, BUFFER_SIZE, 1, this.binary);
+			}
+			if (i < shdr.sh_size)
+			{
+				fread(&buffer, shdr.sh_size - i, 1, this.file);
+				for (size_t j = 0; j < shdr.sh_size - i; j++)
+					buffer[j] = buffer[j] ^ (char) this.original_entry;
+				fwrite(buffer, shdr.sh_size - i, 1, this.binary);
+			}
+			stub_variables->sexion = shdr.sh_addr;
+			stub_variables->chibre = shdr.sh_size;
+			stub_variables->chatte = (char) this.original_entry;
+			fseek(this.binary, this.header.e_shoff + ((idx - 1) * this.header.e_shentsize), SEEK_SET);
+		}
+	}
 
 	fseek(this.binary, 0, SEEK_END);
 	fwrite(stub_bin, stub_bin_len, 1, this.binary);

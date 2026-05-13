@@ -78,8 +78,11 @@ typedef struct packer_t {
 } packer;
 
 typedef struct var_stub {
-	Elf64_Addr	old_entry;
-	Elf64_Addr	to_sub;
+	Elf64_Addr	 	old_entry;
+	Elf64_Addr	 	to_sub;
+	Elf64_Addr 	 	sexion;
+	Elf64_Addr  	chibre;
+	Elf64_Addr  	chatte;
 } var_stub;
 
 #endif
