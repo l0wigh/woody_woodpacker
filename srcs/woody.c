@@ -204,27 +204,29 @@ next:
 		name_buffer[sizeof(name_buffer) - 1] = '\0';
 		if (strcmp(name_buffer, ".text") == 0)
 		{
-			printf("sh_tab.sh_offset: %lx\n", shdr.sh_offset);
-			printf("sh_tab.sh_name: %x\n", shdr.sh_name);
-			printf("shdr.sh_addr: %lx\n", shdr.sh_addr);
-			printf("fin: %lx", shdr.sh_size);
+			printf("sh_tab.sh_offset: 0x%lx\n", shdr.sh_offset);
+			printf("sh_tab.sh_name: 0x%x\n", shdr.sh_name);
+			printf("shdr.sh_addr: 0x%lx\n", shdr.sh_addr);
+			printf("fin: 0x%lx\n", shdr.sh_size);
 			fseek(this.file, shdr.sh_offset, SEEK_SET);
 			fseek(this.binary, shdr.sh_offset, SEEK_SET);
 			size_t i = 0;
 			printf("XOR: %x\n", (char)this.original_entry);
-			for (; i < shdr.sh_size; i = i + BUFFER_SIZE)
+			for (; i < shdr.sh_size / BUFFER_SIZE; i++)
 			{
 				fread(&buffer, BUFFER_SIZE, 1, this.file);
-				for (size_t j = 0; j < BUFFER_SIZE; j++)
+				for (size_t j = 0; j < BUFFER_SIZE; j++) {
 					buffer[j] ^= (char) this.original_entry;
+				}
 				fwrite(buffer, BUFFER_SIZE, 1, this.binary);
 			}
-			if (i < shdr.sh_size)
+			if (i < (shdr.sh_size / BUFFER_SIZE + 1))
 			{
-				fread(&buffer, shdr.sh_size - i, 1, this.file);
-				for (size_t j = 0; j < shdr.sh_size - i; j++)
+				fread(&buffer, shdr.sh_size - (i * BUFFER_SIZE), 1, this.file);
+				for (size_t j = 0; j < shdr.sh_size - (i * BUFFER_SIZE); j++) {
 					buffer[j] = buffer[j] ^ (char) this.original_entry;
-				fwrite(buffer, shdr.sh_size - i, 1, this.binary);
+				}
+				fwrite(buffer, shdr.sh_size - (i * BUFFER_SIZE), 1, this.binary);
 			}
 			stub_variables->sexion = shdr.sh_addr;
 			stub_variables->chibre = shdr.sh_size;
