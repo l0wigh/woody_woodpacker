@@ -77,4 +77,9 @@ typedef struct packer_t {
 	_create_elf	create_elf;
 } packer;
 
+typedef struct var_stub {
+	Elf64_Addr	old_entry;
+	Elf64_Addr	to_sub;
+} var_stub;
+
 #endif
