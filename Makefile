@@ -30,7 +30,7 @@ $(NAME): $(OBJECTS_PREFIXED)
 all: $(NAME)
 
 tests:
-	@cd tests && ./clean_bin.sh
+	@./tests/clean_bin.sh
 	@printf "\033[2K\r${GRN}${TOTEM} [TESTS]${RST} done$(END)\n"
 
 stub:
@@ -45,6 +45,8 @@ clean:
 fclean: clean
 	@rm -f $(NAME)
 	@rm -rf $(OBJS_DIR)
+	@./tests/remove_bin.sh
+	@rm woody
 	@printf "\033[2K\r${GRN}${TOTEM} [FCLEAN]${RST} done$(END)\n"
 
 re: fclean all
