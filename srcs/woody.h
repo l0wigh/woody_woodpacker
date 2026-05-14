@@ -26,7 +26,10 @@
 #define COLOR_RESET   "\033[0m"
 
 #define LOG_PRINT(level, color, fmt, ...) \
-	fprintf(stderr, color "[%s] [%s] " fmt COLOR_RESET "\n", level, __TIME__, ##__VA_ARGS__)
+    fprintf(stderr, color "[%s]%*s [%s] " fmt COLOR_RESET "\n", \
+        level, \
+        (int)(10 - strlen(level) > 0 ? 5 - strlen(level) : 0), "", \
+        __TIME__, ##__VA_ARGS__)
 
 #define LOG_DEBUG(fmt, ...) \
 	fprintf(stderr, COLOR_CYAN "[DEBUG] [%s] [%s:%d] " fmt COLOR_RESET "\n", \

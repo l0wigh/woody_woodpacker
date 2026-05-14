@@ -29,20 +29,20 @@
 STATUS checkELF(const packer *pak)
 {
 	(void)pak;
-	LOG_INFO("Checking ELF...");
+	LOG_OK("Checking ELF...");
 	return ERR_OK;
 }
 
 STATUS get_bin_checksum(const packer *pak)
 {
 	(void)pak;
-	LOG_INFO("Getting checksum...");
+	LOG_OK("Getting checksum...");
 	return ERR_OK;
 }
 
 STATUS encrypt_decrypt(const void *file, const size_t len, const char *key, void *result)
 {
-	LOG_INFO("Encrypt/Decrypt binary...");
+	LOG_OK("Encrypt/Decrypt binary...");
 	if (!key)
 		return ERR_NOKEY;
 	if (!result)
@@ -61,14 +61,13 @@ STATUS encrypt_decrypt(const void *file, const size_t len, const char *key, void
 STATUS output_elf(const packer *pak)
 {
 	(void)pak;
-	LOG_INFO("Generating executable.");
+	LOG_OK("Generating executable.");
 	return ERR_OK;
 }
 
 STATUS set_function(packer *pak)
 {
-	(void)pak;
-	LOG_INFO("Création de la structure");
+	LOG_OK("Création de la structure");
 	pak->check_file = checkELF;
 	pak->get_checksum = get_bin_checksum;
 	pak->encrypt = encrypt_decrypt;
@@ -95,7 +94,7 @@ int main(int argc, char **argv)
 	}
 
 	// Ouverture du fichier et vérification d'erreur
-	LOG_INFO("Ouverture du binaire");
+	LOG_OK("Ouverture du binaire");
 	this.file = fopen(argv[1], "rb");
 	if (this.file == NULL)
 	{
@@ -136,7 +135,7 @@ int main(int argc, char **argv)
 
 	fwrite(&this.header, sizeof(this.header), 1, this.binary);
 
-	// LOG_INFO("Payload (%u bytes):\n", stub_bin_len);
+	// LOG_OK("Payload (%u bytes):\n", stub_bin_len);
  //    for (size_t i = 0; i < stub_bin_len; i++) {
  //        printf("0x%02x, ", stub_bin[i]);
  //        if ((i + 1) % 12 == 0) printf("\n");
@@ -152,7 +151,7 @@ int main(int argc, char **argv)
 		switch (pheader.p_type)
 		{
 			case PT_NOTE:
-				// LOG_INFO("this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)): %lx", this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)));
+				// LOG_OK("this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)): %lx", this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)));
 				fseek(this.binary, this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)), SEEK_SET);
 
 				pheader.p_type = PT_LOAD;
@@ -167,13 +166,13 @@ int main(int argc, char **argv)
 
 				fseek(this.binary, this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)), SEEK_SET);
 				fread(&pheader, sizeof(pheader), 1, this.binary);
-				LOG_INFO("Segment PT_NOTE modifié");
-				// LOG_INFO("Offset fichier : 0x%lx", pheader.p_offset);
-				// LOG_INFO("Adresse Virtuelle : 0x%lx", pheader.p_vaddr);
-				// LOG_INFO("Adresse Phy : 0x%lx", pheader.p_paddr);
-				// LOG_INFO("Taille en mémoire : %lu octets", pheader.p_memsz);
-				// LOG_INFO("Size : %d", this.header.e_phentsize);
-				// LOG_INFO("Flags : %c%c%c",
+				LOG_OK("Segment PT_NOTE modifié");
+				// LOG_OK("Offset fichier : 0x%lx", pheader.p_offset);
+				// LOG_OK("Adresse Virtuelle : 0x%lx", pheader.p_vaddr);
+				// LOG_OK("Adresse Phy : 0x%lx", pheader.p_paddr);
+				// LOG_OK("Taille en mémoire : %lu octets", pheader.p_memsz);
+				// LOG_OK("Size : %d", this.header.e_phentsize);
+				// LOG_OK("Flags : %c%c%c",
 				// 	(pheader.p_flags & PF_R) ? 'R' : '-',
 				// 	(pheader.p_flags & PF_W) ? 'W' : '-',
 				// 	(pheader.p_flags & PF_X) ? 'X' : '-');
@@ -202,9 +201,19 @@ next:
 		fseek(this.binary, sh_tab.sh_offset + shdr.sh_name, SEEK_SET);
 		fread(name_buffer, 1, sizeof(name_buffer) - 1, this.binary);
 		name_buffer[sizeof(name_buffer) - 1] = '\0';
-		if (strcmp(name_buffer, ".text") == 0)
+		if (strcmp(name_buffer, ".woody") == 0)
 		{
-			LOG_INFO("Section .text trouvée");
+			LOG_ERROR("Ce binaire est déjà packer par woody_woodpacker");
+			return ERR_NOTELF;
+		}
+		else if (strcmp(name_buffer, ".text") == 0)
+		{
+			LOG_OK("Section .text trouvée");
+
+			fseek(this.binary, sh_tab.sh_offset + shdr.sh_name, SEEK_SET);
+			const char *new_name = ".woody";
+			fwrite(new_name, strlen(new_name) + 1, 1, this.binary);
+			LOG_OK("Section .text renommée en .woody avec succès.");
 			// printf("sh_tab.sh_offset: 0x%lx\n", shdr.sh_offset);
 			// printf("sh_tab.sh_name: 0x%x\n", shdr.sh_name);
 			// printf("shdr.sh_addr: 0x%lx\n", shdr.sh_addr);
@@ -212,7 +221,7 @@ next:
 			fseek(this.file, shdr.sh_offset, SEEK_SET);
 			fseek(this.binary, shdr.sh_offset, SEEK_SET);
 			// printf("XOR: %x\n", (char)this.original_entry);
-			LOG_INFO("Ecryption de la section .text");
+			LOG_OK("Ecryption de la section .text");
 			char *encryption_buffer = (char *) calloc(shdr.sh_size + 1, sizeof(char));
 			if (fread(encryption_buffer, 1, shdr.sh_size, this.file) != shdr.sh_size) {
 				LOG_ERROR("Erreur lors de la lecture de la section");
@@ -226,16 +235,16 @@ next:
 			stub_variables->text_addr = shdr.sh_addr;
 			stub_variables->text_size = shdr.sh_size;
 			stub_variables->xor_key = (char) this.original_entry;
-			fseek(this.binary, this.header.e_shoff + ((idx - 1) * this.header.e_shentsize), SEEK_SET);
+			break;
 		}
 	}
 
-	LOG_INFO("Ecriture du stub");
+	LOG_OK("Ecriture du stub");
 	memcpy(&stub_bin[stub_bin_len - sizeof(var_stub)], stub_variables, sizeof(var_stub));
 	fseek(this.binary, 0, SEEK_END);
 	fwrite(stub_bin, stub_bin_len, 1, this.binary);
 
-	// LOG_INFO("Alignement du binaire");
+	// LOG_OK("Alignement du binaire");
 	// fseek(this.binary, 0, SEEK_END);
 	// long current_pos = ftell(this.binary);
 	// long padding = (4096 - (current_pos % 4096)) % 4096;
@@ -244,6 +253,6 @@ next:
 
 	fclose(this.binary);
 	fclose(this.file);
-	LOG_INFO("Votre binaire est pret");
+	LOG_OK("Votre binaire est pret");
 	return 0;
 }
