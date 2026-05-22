@@ -15,7 +15,15 @@ OBJS		= $(SRCS:.c=.o)
 OBJECTS_PREFIXED = $(addprefix $(OBJS_DIR), $(OBJS))
 CC			= gcc
 CC_FLAGS	= -Wall -Werror -Wextra -g3 -fsanitize=address
-LIBS		=
+LIBS		= -lcrypto
+
+ifdef DEBUG
+CC_FLAGS += -DDEBUG
+endif
+
+ifdef STUB_OFFSET
+CC_FLAGS += -DSTUB_OFFSET=$(STUB_OFFSET)
+endif
 
 $(OBJS_DIR)%.o : %.c $(PROJECT_H)
 	@mkdir -p $(OBJS_DIR)
@@ -49,4 +57,21 @@ fclean: clean
 
 re: fclean all
 
-.PHONY:		all clean fclean re tests stub
+debug:
+
+help:
+	@printf "Usage: make [target] <DEFINE>\n\n"
+	@printf "Targets:\n"
+	@printf "${GRN}  all  ${RST}     - Compile the project\n"
+	@printf "${GRN}  clean  ${RST}   - Remove object files\n"
+	@printf "${GRN}  fclean  ${RST}  - Remove object files and the executable\n"
+	@printf "${GRN}  re  ${RST}      - Clean and compile the project\n"
+	@printf "${GRN}  tests  ${RST}   - Run the tests\n"
+	@printf "${GRN}  stub  ${RST}    - Compile the stub\n"
+	@printf "${GRN}  help  ${RST}    - Display this help message\n\n"
+	@printf "You can also set the STUB_OFFSET environment variable to specify the stub offset.\n"
+	@printf "You can also set the DEBUG environment variable to enable debug mode.\n\n"
+	@printf "${BLU}Example: make all DEBUG=1 STUB_OFFSET=0xC0000000\n${RST}"
+	@printf "\n"
+
+.PHONY:		all clean fclean re tests stub help
