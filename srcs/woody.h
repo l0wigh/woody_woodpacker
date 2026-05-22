@@ -54,7 +54,8 @@ typedef enum ERROR_E {
 	ERR_ARGS,
 	ERR_NOTELF,
 	ERR_NOKEY,
-	ERR_NOTARGET
+	ERR_NOTARGET,
+	ERR_SEGMOD
 } STATUS;
 
 extern unsigned char buffer[BUFFER_SIZE];
@@ -69,6 +70,8 @@ typedef STATUS (*_create_elf)(const struct packer_t *pak);
 typedef STATUS (*_checker)(const char *filename, const struct packer_t *pak);	// Check ELF
 typedef STATUS (*_openfile)(const char *filename, const struct packer_t *pak);
 typedef STATUS (*_wrtie_stub)(const struct packer_t *pak);
+typedef STATUS (*_segment_modifer)(const struct packer_t *pak);
+typedef STATUS (*_segment_protect)(const struct packer_t *pak);
 
 typedef struct var_stub {
 	Elf64_Addr	old_entry;
@@ -90,17 +93,24 @@ typedef struct packer_t {
 	char		name[NAME_MAX_LEN];
 	FILE		*binary;
 	var_stub	*stub_variables;
-
+	Elf64_Phdr	pheader;
+	long		pheader_offset;
+	Elf64_Shdr	shdr;
+	long		shdr_offset;
+	char		*encryption_buffer;
+	uint64_t	encryption_len;
 	// Functions
 	_encrypt	encrypt;
 	_decrypt	decrypt;
 	_pack		pack;
 
-	_checker	check_file;
-	_checksum	get_checksum;
-	_create_elf	create_elf;
-	_openfile	open_file;
-	_wrtie_stub	write_stub;
+	_checker		check_file;
+	_checksum		get_checksum;
+	_create_elf		create_elf;
+	_openfile		open_file;
+	_wrtie_stub		write_stub;
+	_segment_modifer	segment_mod;
+	_segment_protect	segment_protect;
 } packer;
 
 #endif

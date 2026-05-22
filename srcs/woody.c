@@ -101,9 +101,17 @@ STATUS output_elf(const packer *packer_t)
 	packer *pak = (packer *)packer_t;
 	LOG_OK("Generating executable.");
 
+	fseek(pak->binary, pak->pheader_offset, SEEK_SET);
+	fwrite(&pak->pheader, sizeof(Elf64_Phdr), 1, pak->binary);
+
+	fseek(pak->binary, pak->shdr_offset, SEEK_SET);
+	fwrite(pak->encryption_buffer, 1, pak->encryption_len, pak->binary);
+
 	pak->write_stub(pak);
 	fclose(pak->binary);
 	fclose(pak->file);
+	if (pak->encryption_buffer)
+		free(pak->encryption_buffer);
 	if (chmod("./woody", 0755) != 0)
 		LOG_ERROR("Erreur lors de la modification des permissions du fichier");
 	return ERR_OK;
@@ -161,6 +169,118 @@ STATUS write_stub(const packer *packer_t)
 	return ERR_OK;
 }
 
+STATUS segment_mod(const packer *packer_t)
+{
+	packer *pak = (packer *)packer_t;
+	int idx = 0;
+
+	fseek(pak->binary, pak->header.e_phoff, SEEK_SET);
+	while (idx++ < pak->header.e_phnum) {
+		fread(&pak->pheader, sizeof(Elf64_Phdr), 1, pak->binary);
+		switch (pak->pheader.p_type) {
+			case PT_NOTE:
+				// LOG_OK("pak->header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)): %lx", pak->header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)));
+				fseek(pak->binary, pak->header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)), SEEK_SET);
+				pak->pheader_offset = ftell(pak->binary);
+
+				pak->pheader.p_type = PT_LOAD;
+				pak->pheader.p_flags = PF_R | PF_X;
+				pak->pheader.p_offset = pak->filesize;
+				pak->pheader.p_vaddr = pak->filesize + STUB_OFFSET;
+				pak->pheader.p_paddr = pak->filesize + STUB_OFFSET;
+				pak->pheader.p_filesz = stub_bin_len;
+				pak->pheader.p_memsz = stub_bin_len;
+
+				// Final binary do segfault when debug is define!!!!
+				#ifdef DEBUG
+				fseek(pak->binary, pak->header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)), SEEK_SET);
+				fread(&pak->pheader, sizeof(Elf64_Phdr), 1, pak->binary);
+				LOG_OK("Segment PT_NOTE modifié");
+				LOG_DEBUG("Offset fichier : 0x%lx", pak->pheader.p_offset);
+				LOG_DEBUG("Adresse Virtuelle : 0x%lx", pak->pheader.p_vaddr);
+				LOG_DEBUG("Adresse Phy : 0x%lx", pak->pheader.p_paddr);
+				LOG_DEBUG("Taille en mémoire : %lu octets", pak->pheader.p_memsz);
+				LOG_DEBUG("Size : %d", pak->header.e_phentsize);
+				LOG_DEBUG("Flags : %c%c%c",
+					(pak->pheader.p_flags & PF_R) ? 'R' : '-',
+					(pak->pheader.p_flags & PF_W) ? 'W' : '-',
+					(pak->pheader.p_flags & PF_X) ? 'X' : '-');
+				#endif
+				return ERR_OK;
+			default:
+				continue;
+		}
+	}
+
+	LOG_ERROR("Aucune PT_NOTE trouvée, le packer s'arrête");
+	return ERR_NOTARGET;
+}
+
+STATUS segment_protect(const packer *packer_t)
+{
+	packer *pak = (packer *)packer_t;
+	int idx = 0;
+	Elf64_Shdr sh_tab;
+	char name_buffer[64];
+
+	LOG_OK("Protection des segments");
+
+	fseek(pak->binary, pak->header.e_shoff + (pak->header.e_shstrndx * pak->header.e_shentsize), SEEK_SET);
+	fread(&sh_tab, sizeof(Elf64_Shdr), 1, pak->binary);
+
+	while (idx++ < pak->header.e_shnum) {
+		Elf64_Shdr shdr;
+
+		fseek(pak->binary, pak->header.e_shoff + (idx * pak->header.e_shentsize), SEEK_SET);
+		fread(&shdr, sizeof(Elf64_Shdr), 1, pak->binary);
+		fseek(pak->binary, sh_tab.sh_offset + shdr.sh_name, SEEK_SET);
+		fread(name_buffer, 1, sizeof(name_buffer) - 1, pak->binary);
+		name_buffer[sizeof(name_buffer) - 1] = '\0';
+
+		if (strcmp(name_buffer, ".woody") == 0) {
+			LOG_ERROR("Ce binaire est déjà packer par woody_woodpacker");
+			return ERR_NOTELF;
+		}
+		else if (strcmp(name_buffer, ".text") == 0) {
+			LOG_OK("Section .text trouvée");
+
+			fseek(pak->binary, sh_tab.sh_offset + shdr.sh_name, SEEK_SET);
+			const char *new_name = ".woody";
+			fwrite(new_name, strlen(new_name) + 1, 1, pak->binary);
+
+			LOG_OK("Section .text renommée en .woody avec succès.");
+			LOG_DEBUG("sh_tab.sh_offset: 0x%lx", shdr.sh_offset);
+			LOG_DEBUG("sh_tab.sh_name: 0x%x", shdr.sh_name);
+			LOG_DEBUG("shdr.sh_addr: 0x%lx", shdr.sh_addr);
+			LOG_DEBUG("fin: 0x%lx", shdr.sh_size);
+			LOG_DEBUG("XOR: %x", (char)pak->original_entry);
+			LOG_OK("Ecryption de la section .text");
+
+			fseek(pak->file, shdr.sh_offset, SEEK_SET);
+			fseek(pak->binary, shdr.sh_offset, SEEK_SET);
+
+			pak->encryption_buffer = (char *) calloc(shdr.sh_size + 1, sizeof(char)); //		/!\ MALLOC!!!!
+
+			if (fread(pak->encryption_buffer, 1, shdr.sh_size, pak->file) != shdr.sh_size) {
+				LOG_ERROR("Erreur lors de la lecture de la section");
+				free(pak->encryption_buffer);
+				return ERR_NOTARGET;
+			}
+
+			for (size_t i = 0; i < shdr.sh_size; i++)
+				pak->encryption_buffer[i] ^= (char)(pak->original_entry & 0xFF);
+
+			pak->shdr_offset = ftell(pak->binary);
+			pak->encryption_len = shdr.sh_size;
+			pak->stub_variables->text_addr = shdr.sh_addr;
+			pak->stub_variables->text_size = shdr.sh_size;
+			pak->stub_variables->xor_key = (char) pak->original_entry;
+			break;
+		}
+	}
+	return ERR_OK;
+}
+
 STATUS set_function(packer *pak)
 {
 	LOG_OK("Création de la structure");
@@ -172,6 +292,8 @@ STATUS set_function(packer *pak)
 	pak->create_elf = output_elf;
 	pak->open_file = open_file;
 	pak->write_stub = write_stub;
+	pak->segment_mod = segment_mod;
+	pak->segment_protect = segment_protect;
 	return ERR_OK;
 }
 
@@ -190,104 +312,16 @@ int main(int argc, char **argv)
 	if (this.open_file(argv[1], &this) != ERR_OK)
 		return ERR_ARGS;
 
-	this.get_checksum(&this);
+	this.get_checksum(&this); // Not used now...
 
-	// Modification des segments PT_NOTE en PT_LOAD
-	fseek(this.binary, this.header.e_phoff, SEEK_SET);
-	int idx = 0;
-	while (idx++ < this.header.e_phnum) {
-		Elf64_Phdr pheader;
-		fread(&pheader, sizeof(pheader), 1, this.binary);
-		switch (pheader.p_type) {
-			case PT_NOTE:
-				// LOG_OK("this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)): %lx", this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)));
-				fseek(this.binary, this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)), SEEK_SET);
+	if (this.segment_mod(&this) != ERR_OK)
+		return ERR_SEGMOD;
 
-				pheader.p_type = PT_LOAD;
-				pheader.p_flags = PF_R | PF_X;
-				pheader.p_offset = this.filesize;
-				pheader.p_vaddr = this.filesize + STUB_OFFSET;
-				pheader.p_paddr = this.filesize + STUB_OFFSET;
-				pheader.p_filesz = stub_bin_len;
-				pheader.p_memsz = stub_bin_len;
-
-				fwrite(&pheader, sizeof(pheader), 1, this.binary);
-
-				fseek(this.binary, this.header.e_phoff + ((idx - 1) * sizeof(Elf64_Phdr)), SEEK_SET);
-				fread(&pheader, sizeof(pheader), 1, this.binary);
-				LOG_OK("Segment PT_NOTE modifié");
-				LOG_DEBUG("Offset fichier : 0x%lx", pheader.p_offset);
-				LOG_DEBUG("Adresse Virtuelle : 0x%lx", pheader.p_vaddr);
-				LOG_DEBUG("Adresse Phy : 0x%lx", pheader.p_paddr);
-				LOG_DEBUG("Taille en mémoire : %lu octets", pheader.p_memsz);
-				LOG_DEBUG("Size : %d", this.header.e_phentsize);
-				LOG_DEBUG("Flags : %c%c%c",
-					(pheader.p_flags & PF_R) ? 'R' : '-',
-					(pheader.p_flags & PF_W) ? 'W' : '-',
-					(pheader.p_flags & PF_X) ? 'X' : '-');
-				goto next;
-				//this.encrypt(&this);
-			default:
-				continue;
-		}
-	}
-
-	LOG_ERROR("Aucune PT_NOTE trouvée, le packer s'arrête");
-	return ERR_NOTARGET;
-
-// encrypte le binaire
-next:
-	Elf64_Shdr sh_tab;
-	char name_buffer[64];
-	fseek(this.binary, this.header.e_shoff + (this.header.e_shstrndx * this.header.e_shentsize), SEEK_SET);
-	fread(&sh_tab, sizeof(Elf64_Shdr), 1, this.binary);
-	// printf("This: %lx\n", ftell(this.binary));
-	idx = 0;
-	while (idx++ < this.header.e_shnum) {
-		Elf64_Shdr shdr;
-
-		fseek(this.binary, this.header.e_shoff + (idx * this.header.e_shentsize), SEEK_SET);
-		fread(&shdr, sizeof(Elf64_Shdr), 1, this.binary);
-		fseek(this.binary, sh_tab.sh_offset + shdr.sh_name, SEEK_SET);
-		fread(name_buffer, 1, sizeof(name_buffer) - 1, this.binary);
-		name_buffer[sizeof(name_buffer) - 1] = '\0';
-		if (strcmp(name_buffer, ".woody") == 0) {
-			LOG_ERROR("Ce binaire est déjà packer par woody_woodpacker");
-			return ERR_NOTELF;
-		}
-		else if (strcmp(name_buffer, ".text") == 0) {
-			LOG_OK("Section .text trouvée");
-
-			fseek(this.binary, sh_tab.sh_offset + shdr.sh_name, SEEK_SET);
-			const char *new_name = ".woody";
-			fwrite(new_name, strlen(new_name) + 1, 1, this.binary);
-			LOG_OK("Section .text renommée en .woody avec succès.");
-			LOG_DEBUG("sh_tab.sh_offset: 0x%lx", shdr.sh_offset);
-			LOG_DEBUG("sh_tab.sh_name: 0x%x", shdr.sh_name);
-			LOG_DEBUG("shdr.sh_addr: 0x%lx", shdr.sh_addr);
-			LOG_DEBUG("fin: 0x%lx", shdr.sh_size);
-			fseek(this.file, shdr.sh_offset, SEEK_SET);
-			fseek(this.binary, shdr.sh_offset, SEEK_SET);
-			LOG_DEBUG("XOR: %x", (char)this.original_entry);
-			LOG_OK("Ecryption de la section .text");
-			char *encryption_buffer = (char *) calloc(shdr.sh_size + 1, sizeof(char));
-			if (fread(encryption_buffer, 1, shdr.sh_size, this.file) != shdr.sh_size) {
-				LOG_ERROR("Erreur lors de la lecture de la section");
-				free(encryption_buffer);
-				return ERR_NOTARGET;
-			}
-			for (size_t i = 0; i < shdr.sh_size; i++)
-				encryption_buffer[i] ^= (char)(this.original_entry & 0xFF);
-			fwrite(encryption_buffer, 1, shdr.sh_size, this.binary);
-			free(encryption_buffer);
-			this.stub_variables->text_addr = shdr.sh_addr;
-			this.stub_variables->text_size = shdr.sh_size;
-			this.stub_variables->xor_key = (char) this.original_entry;
-			break;
-		}
-	}
+	if (this.segment_protect(&this) != ERR_OK)
+		return ERR_SEGMOD;
 
 	// Set header, make stub, set new file executable and close all files.
 	this.create_elf(&this);
+	LOG_OK("Packing terminé avec succès");
 	return 0;
 }

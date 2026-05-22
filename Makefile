@@ -58,6 +58,7 @@ fclean: clean
 re: fclean all
 
 debug:
+	@make re DEBUG=1
 
 help:
 	@printf "Usage: make [target] <DEFINE>\n\n"
