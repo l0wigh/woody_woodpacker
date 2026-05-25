@@ -104,10 +104,10 @@ STATUS output_elf(const packer *packer_t)
 	fseek(pak->binary, pak->pheader_offset, SEEK_SET);
 	fwrite(&pak->pheader, sizeof(Elf64_Phdr), 1, pak->binary);
 
-	fseek(pak->binary, pak->rodata_shdr_offset, SEEK_SET);
-	fwrite(pak->rodata_encryption_buffer, 1, pak->rodata_encryption_len, pak->binary);
 	fseek(pak->binary, pak->text_shdr_offset, SEEK_SET);
 	fwrite(pak->text_encryption_buffer, 1, pak->text_encryption_len, pak->binary);
+	fseek(pak->binary, pak->rodata_shdr_offset, SEEK_SET);
+	fwrite(pak->rodata_encryption_buffer, 1, pak->rodata_encryption_len, pak->binary);
 
 	pak->write_stub(pak);
 	fclose(pak->binary);
