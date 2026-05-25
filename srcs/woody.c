@@ -104,14 +104,18 @@ STATUS output_elf(const packer *packer_t)
 	fseek(pak->binary, pak->pheader_offset, SEEK_SET);
 	fwrite(&pak->pheader, sizeof(Elf64_Phdr), 1, pak->binary);
 
-	fseek(pak->binary, pak->shdr_offset, SEEK_SET);
-	fwrite(pak->encryption_buffer, 1, pak->encryption_len, pak->binary);
+	fseek(pak->binary, pak->rodata_shdr_offset, SEEK_SET);
+	fwrite(pak->rodata_encryption_buffer, 1, pak->rodata_encryption_len, pak->binary);
+	fseek(pak->binary, pak->text_shdr_offset, SEEK_SET);
+	fwrite(pak->text_encryption_buffer, 1, pak->text_encryption_len, pak->binary);
 
 	pak->write_stub(pak);
 	fclose(pak->binary);
 	fclose(pak->file);
-	if (pak->encryption_buffer)
-		free(pak->encryption_buffer);
+	if (pak->text_encryption_buffer)
+		free(pak->text_encryption_buffer);
+	if (pak->rodata_encryption_buffer)
+		free(pak->rodata_encryption_buffer);
 	if (chmod("./woody", 0755) != 0)
 		LOG_ERROR("Erreur lors de la modification des permissions du fichier");
 	return ERR_OK;
@@ -259,24 +263,65 @@ STATUS segment_protect(const packer *packer_t)
 			fseek(pak->file, shdr.sh_offset, SEEK_SET);
 			fseek(pak->binary, shdr.sh_offset, SEEK_SET);
 
-			pak->encryption_buffer = (char *) calloc(shdr.sh_size + 1, sizeof(char)); //		/!\ MALLOC!!!!
+			pak->text_encryption_buffer = (char *) calloc(shdr.sh_size + 1, sizeof(char)); //		/!\ MALLOC!!!!
 
-			if (fread(pak->encryption_buffer, 1, shdr.sh_size, pak->file) != shdr.sh_size) {
+			if (fread(pak->text_encryption_buffer, 1, shdr.sh_size, pak->file) != shdr.sh_size) {
 				LOG_ERROR("Erreur lors de la lecture de la section");
-				free(pak->encryption_buffer);
+				free(pak->text_encryption_buffer);
 				return ERR_NOTARGET;
 			}
 
 			for (size_t i = 0; i < shdr.sh_size; i++)
-				pak->encryption_buffer[i] ^= (char)(pak->original_entry & 0xFF);
+				pak->text_encryption_buffer[i] ^= (char)(pak->original_entry & 0xFF);
 
-			pak->shdr_offset = ftell(pak->binary);
-			pak->encryption_len = shdr.sh_size;
+			pak->text_shdr_offset = ftell(pak->binary);
+			pak->text_encryption_len = shdr.sh_size;
 			pak->stub_variables->text_addr = shdr.sh_addr;
 			pak->stub_variables->text_size = shdr.sh_size;
 			pak->stub_variables->xor_key = (char) pak->original_entry;
-			break;
 		}
+		else if (strcmp(name_buffer, ".rodata") == 0) {
+			LOG_OK("Section .rodata trouvée");
+
+			LOG_DEBUG("sh_tab.sh_offset: 0x%lx", shdr.sh_offset);
+			LOG_DEBUG("sh_tab.sh_name: 0x%x", shdr.sh_name);
+			LOG_DEBUG("shdr.sh_addr: 0x%lx", shdr.sh_addr);
+			LOG_DEBUG("fin: 0x%lx", shdr.sh_size);
+			LOG_DEBUG("XOR: %x", (char)pak->original_entry);
+			LOG_OK("Ecryption de la section .data");
+
+			fseek(pak->file, shdr.sh_offset, SEEK_SET);
+			fseek(pak->binary, shdr.sh_offset, SEEK_SET);
+
+			pak->rodata_encryption_buffer = (char *) calloc(shdr.sh_size + 1, sizeof(char)); //		/!\ MALLOC!!!!
+
+			if (fread(pak->rodata_encryption_buffer, 1, shdr.sh_size, pak->file) != shdr.sh_size) {
+				LOG_ERROR("Erreur lors de la lecture de la section");
+				free(pak->rodata_encryption_buffer);
+				return ERR_NOTARGET;
+			}
+
+			for (size_t i = 0; i < shdr.sh_size; i++)
+				pak->rodata_encryption_buffer[i] ^= (char)(pak->original_entry & 0xFF);
+
+			pak->rodata_shdr_offset = ftell(pak->binary);
+			pak->rodata_encryption_len = shdr.sh_size;
+			pak->stub_variables->rodata_addr = shdr.sh_addr;
+			pak->stub_variables->rodata_size = shdr.sh_size;
+		}
+		else if ((strcmp(name_buffer, ".comment") == 0) ||
+                 (strcmp(name_buffer, ".symtab") == 0) ||
+                 (strcmp(name_buffer, ".strtab") == 0)) {
+            LOG_OK("Zone inutile trouvée : %s. Neutralisation...", name_buffer);
+            if (shdr.sh_offset > 0 && shdr.sh_size > 0) {
+	            fseek(pak->binary, shdr.sh_offset, SEEK_SET);
+	            for (Elf64_Xword i = 0; i < shdr.sh_size; i++) {
+		            char pattern_char = (i % 2 == 0) ? '6' : '9';
+		            fwrite(&pattern_char, 1, 1, pak->binary);
+	            }
+	            LOG_DEBUG("%lu octets remplis par le motif '69' dans %s.", shdr.sh_size, name_buffer);
+            }
+        }
 	}
 	return ERR_OK;
 }
