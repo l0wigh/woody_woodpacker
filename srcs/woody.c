@@ -31,7 +31,7 @@ unsigned char buffer[BUFFER_SIZE];
 STATUS checkELF(const char *filename, const packer *packer_t)
 {
 	packer *pak = (packer *)packer_t;
-	LOG_OK("Checking ELF...");
+	LOG_OK("Vérification ELF...");
 
 	// Vérification du 64bit
 	fread(&pak->header, sizeof(pak->header), 1, pak->binary);
@@ -39,7 +39,7 @@ STATUS checkELF(const char *filename, const packer *packer_t)
 		(pak->header.e_ident[EI_CLASS] != ELFCLASS64) /* || (pak->header.e_machine != EM_X86_64) */ )
 	{
 		LOG_ERROR("Le fichier %s n'est pas un binaire ELF 64-bit", filename);
-		return ERR_NOTELF;
+		exit(ERR_NOTELF);
 	}
 
 	fseek(pak->binary, 0, SEEK_SET);
@@ -64,7 +64,7 @@ STATUS get_bin_checksum(const packer *paker_t)
 {
 	packer *pak = (packer *)paker_t;
 	rewind(pak->file);
-	LOG_OK("Getting checksum...");
+	LOG_OK("Récupération du checksum...");
 
 	compute_md5_from_file(pak->file, pak->checksum);
 	rewind(pak->file);
@@ -80,7 +80,7 @@ STATUS get_bin_checksum(const packer *paker_t)
 
 STATUS encrypt_decrypt(const void *file, const size_t len, const char *key, void *result)
 {
-	LOG_OK("Encrypt/Decrypt binary...");
+	LOG_OK("Encryption du binaire...");
 	if (!key)
 		return ERR_NOKEY;
 	if (!result)
@@ -92,14 +92,14 @@ STATUS encrypt_decrypt(const void *file, const size_t len, const char *key, void
 	for (size_t i = 0; i < len; i++)
 		output[i] =((uint8_t *)file)[i] ^ (uint8_t)key[i % keyLen];
 
-	LOG_OK("Encrypt/Decrypt finish.");
+	LOG_OK("Encryption terminée.");
 	return ERR_OK;
 }
 
 STATUS output_elf(const packer *packer_t)
 {
 	packer *pak = (packer *)packer_t;
-	LOG_OK("Generating executable.");
+	LOG_OK("Création de l'executable.");
 
 	fseek(pak->binary, pak->pheader_offset, SEEK_SET);
 	fwrite(&pak->pheader, sizeof(Elf64_Phdr), 1, pak->binary);
@@ -126,7 +126,7 @@ STATUS open_file(const char *filename, const packer *packer_t)
 	size_t size_buf;
 	packer *pak = (packer *)packer_t;
 
-	LOG_OK("Opening file...");
+	LOG_OK("Ouverture du fichier...");
 	pak->file = fopen(filename, "rb");
 	if (pak->file == NULL) {
 		LOG_ERROR("Erreur lors de l'ouverture du fichier %s: %s", filename, strerror(errno));
@@ -138,7 +138,7 @@ STATUS open_file(const char *filename, const packer *packer_t)
 	pak->filesize = ftell(pak->file);
 	rewind(pak->file);
 
-	LOG_OK("File size: %ld", pak->filesize);
+	LOG_OK("Taille du fichier: %ld", pak->filesize);
 
 	pak->binary = fopen("./woody", "wb+");
 
