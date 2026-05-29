@@ -79,6 +79,11 @@ STATUS get_bin_checksum(const packer *paker_t)
 	pak->stub_variables->white_keycard = pak->checksum[1];
 	pak->stub_variables->red_keycard = pak->checksum[2];
 
+	LOG_INFO("Keycards utilisées");
+	LOG_INFO("Blue : %02lx", pak->stub_variables->blue_keycard);
+	LOG_INFO("White: %02lx", pak->stub_variables->white_keycard);
+	LOG_INFO("Red  : %02lx", pak->stub_variables->red_keycard);
+
 	return ERR_OK;
 }
 

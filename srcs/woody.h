@@ -44,7 +44,7 @@
 #endif
 
 #define LOG_OK(fmt, ...)	LOG_PRINT("OK", COLOR_GREEN, fmt , ##__VA_ARGS__)
-#define LOG_INFO(fmt, ...)	LOG_PRINT("INFO", COLOR_RESET, fmt, ##__VA_ARGS__)
+#define LOG_INFO(fmt, ...)	LOG_PRINT("INFO", COLOR_CYAN, fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...)	LOG_PRINT("WARN", COLOR_YELLOW, fmt, ##__VA_ARGS__)
 #define LOG_ERROR(fmt, ...)	LOG_PRINT("ERROR", COLOR_RED, fmt, ##__VA_ARGS__)
 #define LOG_TMP(fmt, ...)	LOG_PRINT("OTHER", COLOR_BLUE, fmt, ##__VA_ARGS__)

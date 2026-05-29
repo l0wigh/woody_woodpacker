@@ -97,7 +97,7 @@ _start:
 	imul rax, rax
 	add rax, 22240700
 	test rax, 1
-	jz _start.real
+	jnz _start.real
 	mov al, byte [white_keycard]
 	sub byte [rdi], al
 	; On applique la blue keycard
@@ -106,7 +106,7 @@ _start:
 	; On applique la red keycard
 	mov al, byte [red_keycard]
 	add byte [rdi], al
-.real
+.real:
 	mov rax, r15
 	mov rbx, [to_sub]		; Load notre entry point
 	sub rax, rbx
