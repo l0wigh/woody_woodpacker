@@ -80,7 +80,9 @@ typedef struct var_stub {
 	Elf64_Addr	text_size;
 	Elf64_Addr	rodata_addr;
 	Elf64_Addr	rodata_size;
-	char		xor_key;
+	Elf64_Addr	blue_keycard;
+	Elf64_Addr	white_keycard;
+	Elf64_Addr	red_keycard;
 } var_stub;
 
 typedef struct packer_t {
@@ -105,8 +107,6 @@ typedef struct packer_t {
 	uint64_t	text_encryption_len;
 	uint64_t	rodata_encryption_len;
 	// Functions
-	_encrypt	encrypt;
-	_decrypt	decrypt;
 	_pack		pack;
 
 	_checker		check_file;

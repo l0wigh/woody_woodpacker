@@ -75,24 +75,10 @@ STATUS get_bin_checksum(const packer *paker_t)
 		pak->checksum[8], pak->checksum[9], pak->checksum[10], pak->checksum[11],
 		pak->checksum[12], pak->checksum[13], pak->checksum[14], pak->checksum[15]);
 
-	return ERR_OK;
-}
+	pak->stub_variables->blue_keycard = pak->checksum[0];
+	pak->stub_variables->white_keycard = pak->checksum[1];
+	pak->stub_variables->red_keycard = pak->checksum[2];
 
-STATUS encrypt_decrypt(const void *file, const size_t len, const char *key, void *result)
-{
-	LOG_OK("Encryption du binaire...");
-	if (!key)
-		return ERR_NOKEY;
-	if (!result)
-		return ERR_NOTARGET;
-
-	uint8_t *output = (uint8_t *)result;
-	int keyLen = strlen(key);
-
-	for (size_t i = 0; i < len; i++)
-		output[i] =((uint8_t *)file)[i] ^ (uint8_t)key[i % keyLen];
-
-	LOG_OK("Encryption terminée.");
 	return ERR_OK;
 }
 
@@ -272,13 +258,16 @@ STATUS segment_protect(const packer *packer_t)
 			}
 
 			for (size_t i = 0; i < shdr.sh_size; i++)
-				pak->text_encryption_buffer[i] ^= (char)(pak->original_entry & 0xFF);
+			{
+				pak->text_encryption_buffer[i] -= (char)(pak->stub_variables->red_keycard & 0xFF);
+				pak->text_encryption_buffer[i] ^= (char)(pak->stub_variables->blue_keycard & 0xFF);
+				pak->text_encryption_buffer[i] += (char)(pak->stub_variables->white_keycard & 0xFF);
+			}
 
 			pak->text_shdr_offset = ftell(pak->binary);
 			pak->text_encryption_len = shdr.sh_size;
 			pak->stub_variables->text_addr = shdr.sh_addr;
 			pak->stub_variables->text_size = shdr.sh_size;
-			pak->stub_variables->xor_key = (char) pak->original_entry;
 		}
 		else if (strcmp(name_buffer, ".rodata") == 0) {
 			LOG_OK("Section .rodata trouvée");
@@ -302,7 +291,11 @@ STATUS segment_protect(const packer *packer_t)
 			}
 
 			for (size_t i = 0; i < shdr.sh_size; i++)
-				pak->rodata_encryption_buffer[i] ^= (char)(pak->original_entry & 0xFF);
+			{
+				pak->rodata_encryption_buffer[i] += (char)(pak->stub_variables->red_keycard & 0xFF);
+				pak->rodata_encryption_buffer[i] ^= (char)(pak->stub_variables->white_keycard & 0xFF);
+				pak->rodata_encryption_buffer[i] -= (char)(pak->stub_variables->blue_keycard & 0xFF);
+			}
 
 			pak->rodata_shdr_offset = ftell(pak->binary);
 			pak->rodata_encryption_len = shdr.sh_size;
@@ -331,8 +324,6 @@ STATUS set_function(packer *pak)
 	LOG_OK("Création de la structure");
 	pak->check_file = checkELF;
 	pak->get_checksum = get_bin_checksum;
-	pak->encrypt = encrypt_decrypt;
-	pak->decrypt = encrypt_decrypt;
 	pak->pack = NULL;
 	pak->create_elf = output_elf;
 	pak->open_file = open_file;
